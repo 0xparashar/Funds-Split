@@ -79,11 +79,14 @@ pub fn try_split(
         },
     };
 
-    BALANCES.save(deps.storage, &state.unwrap().owner, &owner_balance);
+    let _save_result = match BALANCES.save(deps.storage, &state.unwrap().owner, &owner_balance) {
+        Err(e) => return Err(ContractError::Std(e)),
+        Ok(()) => true,
+    };
 
     let user_balance_1 = BALANCES.may_load(deps.storage, &deps.api.addr_validate(&user1)?)?;
 
-    if info.funds.len() > 1 || info.funds[0].denom != TOKEN_NAME.to_string() {
+    if info.funds.len() > 1 || info.funds[0].denom != *TOKEN_NAME {
         return Err(ContractError::InvalidTokenTransfer {});
     }
 
@@ -104,11 +107,14 @@ pub fn try_split(
         },
     };
 
-    BALANCES.save(
+    let _save_result = match BALANCES.save(
         deps.storage,
         &deps.api.addr_validate(&user1)?,
         &user_balance_1,
-    );
+    ) {
+        Err(e) => return Err(ContractError::Std(e)),
+        Ok(()) => true,
+    };
 
     let user_balance_2 = BALANCES.may_load(deps.storage, &deps.api.addr_validate(&user2)?)?;
 
@@ -127,11 +133,14 @@ pub fn try_split(
         },
     };
 
-    BALANCES.save(
+    let _save_result = match BALANCES.save(
         deps.storage,
         &deps.api.addr_validate(&user2)?,
         &user_balance_2,
-    );
+    ) {
+        Err(e) => return Err(ContractError::Std(e)),
+        Ok(()) => true,
+    };
 
     Ok(Response::new().add_attribute("method", "try_split"))
 }
@@ -143,7 +152,7 @@ pub fn try_withdraw(
 ) -> Result<Response, ContractError> {
     let user_balance = BALANCES.may_load(deps.storage, &info.sender)?;
 
-    if amount != None && amount.as_ref().unwrap().denom != TOKEN_NAME.to_string() {
+    if amount != None && amount.as_ref().unwrap().denom != *TOKEN_NAME {
         return Err(ContractError::InvalidTokenTransfer {});
     }
 
@@ -171,7 +180,10 @@ pub fn try_withdraw(
     };
 
     if user_balance.balance.amount > Uint128::new(0) {
-        BALANCES.save(deps.storage, &info.sender, &user_balance);
+        let _save_result = match BALANCES.save(deps.storage, &info.sender, &user_balance) {
+            Err(e) => return Err(ContractError::Std(e)),
+            Ok(()) => true,
+        };
     } else {
         BALANCES.remove(deps.storage, &info.sender);
     }
@@ -180,8 +192,7 @@ pub fn try_withdraw(
 
 // this is a helper to move the tokens, so the business logic is easy to read
 fn send_tokens(to_address: Addr, amount: Coin, action: &str) -> Response {
-    let mut coin_vec = Vec::new();
-    coin_vec.push(amount);
+    let coin_vec = vec![amount];
     Response::new()
         .add_message(BankMsg::Send {
             to_address: to_address.clone().into(),
@@ -273,8 +284,8 @@ mod tests {
         let bob_wallet = Addr::unchecked("bob");
         let alice_wallet = Addr::unchecked("alice");
         let msg = ExecuteMsg::Split {
-            user1: bob_wallet.clone().into(),
-            user2: alice_wallet.clone().into(),
+            user1: bob_wallet.into(),
+            user2: alice_wallet.into(),
         };
         let info = mock_info("creator", &coins(1000, "usei"));
 
@@ -298,7 +309,7 @@ mod tests {
         let alice_wallet = Addr::unchecked("alice");
         let msg = ExecuteMsg::Split {
             user1: bob_wallet.clone().into(),
-            user2: alice_wallet.clone().into(),
+            user2: alice_wallet.into(),
         };
         let info = mock_info("creator", &coins(1000, "usei"));
 
@@ -308,7 +319,7 @@ mod tests {
             deps.as_ref(),
             mock_env(),
             QueryMsg::GetBalance {
-                user: bob_wallet.clone().into(),
+                user: bob_wallet.into(),
             },
         )
         .unwrap();
@@ -333,8 +344,8 @@ mod tests {
         let bob_wallet = Addr::unchecked("bob");
         let alice_wallet = Addr::unchecked("alice");
         let msg = ExecuteMsg::Split {
-            user1: bob_wallet.clone().into(),
-            user2: alice_wallet.clone().into(),
+            user1: bob_wallet.into(),
+            user2: alice_wallet.into(),
         };
         let info = mock_info("creator", &coins(1000, "BTC"));
 
@@ -356,7 +367,7 @@ mod tests {
         let alice_wallet = Addr::unchecked("alice");
         let msg = ExecuteMsg::Split {
             user1: bob_wallet.clone().into(),
-            user2: alice_wallet.clone().into(),
+            user2: alice_wallet.into(),
         };
         let info = mock_info("creator", &coins(1000, "usei"));
 
@@ -373,13 +384,13 @@ mod tests {
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
-        let info = mock_info("creator", &coins(1000, "usei"));
+        let _info = mock_info("creator", &coins(1000, "usei"));
 
         let res = query(
             deps.as_ref(),
             mock_env(),
             QueryMsg::GetBalance {
-                user: bob_wallet.clone().into(),
+                user: bob_wallet.into(),
             },
         )
         .unwrap();
@@ -405,7 +416,7 @@ mod tests {
         let alice_wallet = Addr::unchecked("alice");
         let msg = ExecuteMsg::Split {
             user1: bob_wallet.clone().into(),
-            user2: alice_wallet.clone().into(),
+            user2: alice_wallet.into(),
         };
         let info = mock_info("creator", &coins(1000, "usei"));
 
@@ -417,13 +428,13 @@ mod tests {
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
-        let info = mock_info("creator", &coins(1000, "usei"));
+        let _info = mock_info("creator", &coins(1000, "usei"));
 
         let res = query(
             deps.as_ref(),
             mock_env(),
             QueryMsg::GetBalance {
-                user: bob_wallet.clone().into(),
+                user: bob_wallet.into(),
             },
         )
         .unwrap();
@@ -446,8 +457,8 @@ mod tests {
         let alice_wallet = Addr::unchecked("alice");
         let owner_wallet = Addr::unchecked("creator");
         let msg = ExecuteMsg::Split {
-            user1: bob_wallet.clone().into(),
-            user2: alice_wallet.clone().into(),
+            user1: bob_wallet.into(),
+            user2: alice_wallet.into(),
         };
         let info = mock_info("creator", &coins(1000, "usei"));
 
@@ -455,13 +466,13 @@ mod tests {
 
         let fees = Uint128::new(1000) * FEE_PERCENT / BASIS_POINT;
 
-        let info = mock_info("creator", &coins(1000, "usei"));
+        let _info = mock_info("creator", &coins(1000, "usei"));
 
         let res = query(
             deps.as_ref(),
             mock_env(),
             QueryMsg::GetBalance {
-                user: owner_wallet.clone().into(),
+                user: owner_wallet.into(),
             },
         )
         .unwrap();
@@ -484,8 +495,8 @@ mod tests {
         let alice_wallet = Addr::unchecked("alice");
         let owner_wallet = Addr::unchecked("creator");
         let msg = ExecuteMsg::Split {
-            user1: bob_wallet.clone().into(),
-            user2: alice_wallet.clone().into(),
+            user1: bob_wallet.into(),
+            user2: alice_wallet.into(),
         };
         let info = mock_info("creator", &coins(1000, "usei"));
 
@@ -497,13 +508,13 @@ mod tests {
 
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
-        let info = mock_info("creator", &coins(1000, "usei"));
+        let _info = mock_info("creator", &coins(1000, "usei"));
 
         let res = query(
             deps.as_ref(),
             mock_env(),
             QueryMsg::GetBalance {
-                user: owner_wallet.clone().into(),
+                user: owner_wallet.into(),
             },
         )
         .unwrap();
